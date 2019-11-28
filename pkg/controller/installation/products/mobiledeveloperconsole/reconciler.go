@@ -10,7 +10,6 @@ import (
 	"github.com/integr8ly/integreatly-operator/pkg/controller/installation/products/config"
 	"github.com/integr8ly/integreatly-operator/pkg/resources"
 	appsv1 "github.com/openshift/api/apps/v1"
-	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -210,16 +209,11 @@ func (r *Reconciler) reconcileComponents(ctx context.Context, client pkgclient.C
 		r.ConfigManager.WriteConfig(r.Config)
 	}
 
-	phase, err := r.ReconcileOauthClient(ctx, inst, &oauthv1.OAuthClient{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: inst.Spec.NamespacePrefix + string(r.Config.GetProductName()),
-		},
-		Secret: clientSecret,
-		RedirectURIs: []string{
-			r.Config.GetHost(),
-		},
-		GrantMethod: oauthv1.GrantHandlerAuto,
+	oauthClientName := inst.Spec.NamespacePrefix + string(r.Config.GetProductName())
+	phase, err := r.ReconcileOauthClient(ctx, inst, oauthClientName, clientSecret, []string{
+		r.Config.GetHost(),
 	}, client)
+
 	if err != nil || phase != v1alpha1.PhaseCompleted {
 		return phase, err
 	}
