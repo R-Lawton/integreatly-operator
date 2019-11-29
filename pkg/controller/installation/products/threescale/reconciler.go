@@ -44,7 +44,7 @@ const (
 	s3CredentialsSecretName      = "s3-credentials"
 	rhssoIntegrationName         = "rhsso"
 	tier                         = "production"
-	defaultKeycloakClientName    = "integreatly-3scale-client"
+	defaultKeycloakClientName    = "3scale"
 )
 
 func NewReconciler(configManager config.ConfigReadWriter, i *v1alpha1.Installation, appsv1Client appsv1Client.AppsV1Interface, oauthv1Client oauthClient.OauthV1Interface, tsClient ThreeScaleInterface, mpm marketplace.MarketplaceInterface) (*Reconciler, error) {

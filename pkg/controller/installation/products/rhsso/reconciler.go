@@ -197,6 +197,9 @@ func (r *Reconciler) createKeycloakRoute(ctx context.Context, inst *v1alpha1.Ins
 
 	or, err := controllerutil.CreateOrUpdate(ctx, serverClient, httpService, func() error {
 		clusterIp := httpService.Spec.ClusterIP
+		httpService.Annotations = map[string]string{
+			"service.alpha.openshift.io/serving-cert-secret-name": "sso-x509-https-secret",
+		}
 		httpService.Spec = v1.ServiceSpec{
 			ClusterIP: clusterIp,
 			Ports: []v1.ServicePort{
@@ -204,7 +207,7 @@ func (r *Reconciler) createKeycloakRoute(ctx context.Context, inst *v1alpha1.Ins
 					Name:       "keycloak",
 					Protocol:   v1.ProtocolTCP,
 					Port:       8443,
-					TargetPort: intstr.FromInt(8080),
+					TargetPort: intstr.FromInt(8443),
 				},
 			},
 			Selector: map[string]string{
@@ -231,8 +234,7 @@ func (r *Reconciler) createKeycloakRoute(ctx context.Context, inst *v1alpha1.Ins
 				TargetPort: intstr.FromString("keycloak"),
 			},
 			TLS: &v12.TLSConfig{
-				Termination:                   v12.TLSTerminationEdge,
-				InsecureEdgeTerminationPolicy: v12.InsecureEdgeTerminationPolicyRedirect,
+				Termination:                   v12.TLSTerminationReencrypt,
 			},
 			WildcardPolicy: v12.WildcardPolicyNone,
 		}
@@ -435,6 +437,7 @@ func (r *Reconciler) setupOpenshiftIDP(ctx context.Context, inst *v1alpha1.Insta
 	if err != nil {
 		return pkgerr.Wrapf(err, "Could not find %s Secret", oauthClientSecrets.Name)
 	}
+
 
 	clientSecretBytes, ok := oauthClientSecrets.Data[string(r.Config.GetProductName())]
 	if !ok {

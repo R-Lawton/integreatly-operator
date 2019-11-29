@@ -30,7 +30,7 @@ const (
 	defaultInstallationNamespace = "codeready-workspaces"
 	defaultCheClusterName        = "integreatly-cluster"
 	defaultSubscriptionName      = "integreatly-codeready-workspaces"
-	defaultKeycloakClientName    = "integreatly-codeready-client"
+	defaultKeycloakClientName    = "che-client"
 )
 
 type Reconciler struct {
