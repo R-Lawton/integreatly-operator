@@ -16,19 +16,6 @@ spec:
       "links": [],
       "panels": [
         {
-          "collapsed": false,
-          "gridPos": {
-            "h": 1,
-            "w": 24,
-            "x": 0,
-            "y": 0
-          },
-          "panels": [],
-          "repeat": null,
-          "title": "CPU Usage",
-          "type": "row"
-        },
-        {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
