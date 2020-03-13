@@ -247,84 +247,182 @@ var expectedAWSRules = []alertsTestRule{
 			"3scaleRedisCacheConnectionFailed",
 		},
 	},
+	// {
+	// 	File: "redhat-rhmi-operator-connectivity-rule-threescale-backend-redis-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"3scaleRedisCacheConnectionFailed",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-connectivity-rule-threescale-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"3scalePostgresConnectionFailed",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-availability-rule-threescale-redis-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"3scaleRedisCacheUnavailable",
+	// 	},
+	// },
 	{
-		File: "redhat-rhmi-operator-connectivity-rule-threescale-backend-redis-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-availability-rule-rhssouser-postgres-rhmi.yaml",
 		Rules: []string{
-			"3scaleRedisCacheConnectionFailed",
+			"user-ssoPostgresInstanceUnavailable",
+		},
+
+	},
+	{
+		File: "redhat-rhmi-operator-availability-rule-rhsso-postgres-rhmi.yaml",
+		Rules: []string{
+			"rhssoPostgresInstanceUnavailable",
+
 		},
 	},
 	{
-		File: "redhat-rhmi-operator-connectivity-rule-threescale-postgres-example-rhmi.yaml",
-		Rules: []string{
-			"3scalePostgresConnectionFailed",
-		},
-	},
-	{
-		File: "redhat-rhmi-operator-availability-rule-threescale-redis-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-availability-rule-threescale-backend-redis-rhmi.yaml",
 		Rules: []string{
 			"3scaleRedisCacheUnavailable",
+
 		},
 	},
 	{
-		File: "redhat-rhmi-operator-availability-rule-threescale-backend-redis-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-connectivity-rule-rhsso-postgres-rhmi.yaml",
 		Rules: []string{
-			"3scaleRedisCacheUnavailable",
+			"rhssoPostgresConnectionFailed",
+
 		},
 	},
 	{
-		File: "redhat-rhmi-operator-availability-rule-threescale-postgres-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-connectivity-rule-codeready-postgres-rhmi.yaml",
 		Rules: []string{
-			"3scalePostgresInstanceUnavailable",
+			"codeready-workspacesPostgresConnectionFailed",
+
 		},
 	},
+	
+	// {
+	// 	File: "redhat-rhmi-operator-availability-rule-threescale-backend-redis-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"3scaleRedisCacheUnavailable",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-availability-rule-threescale-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"3scalePostgresInstanceUnavailable",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-connectivity-rule-ups-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"upsPostgresConnectionFailed",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-availability-rule-ups-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"upsPostgresInstanceUnavailable",
+	// 	},
+	// },
+
 	{
-		File: "redhat-rhmi-operator-connectivity-rule-ups-postgres-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-availability-rule-codeready-postgres-rhmi.yaml",
+		Rules: []string{
+			"codeready-workspacesPostgresInstanceUnavailable",
+		},
+	},
+	// {
+	// 	File: "redhat-rhmi-operator-availability-rule-codeready-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"codeready-workspacesPostgresInstanceUnavailable",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-connectivity-rule-codeready-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"codeready-workspacesPostgresConnectionFailed",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-connectivity-rule-rhssouser-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"user-ssoPostgresConnectionFailed",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-availability-rule-rhssouser-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"user-ssoPostgresInstanceUnavailable",
+	// 	},
+	// },
+	{
+		File: "redhat-rhmi-operator-connectivity-rule-ups-postgres-rhmi.yaml",
 		Rules: []string{
 			"upsPostgresConnectionFailed",
 		},
 	},
 	{
-		File: "redhat-rhmi-operator-availability-rule-ups-postgres-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-connectivity-rule-threescale-backend-redis-rhmi.yaml",
+		Rules: []string{
+			"3scaleRedisCacheConnectionFailed",
+		},
+	},
+
+	
+	{
+		File: "redhat-rhmi-operator-availability-rule-threescale-postgres-rhmi.yaml",
+		Rules: []string{
+			"3scalePostgresInstanceUnavailable",
+		},
+	},
+
+	{
+		File: "redhat-rhmi-operator-availability-rule-ups-postgres-rhmi.yaml",
 		Rules: []string{
 			"upsPostgresInstanceUnavailable",
 		},
 	},
 	{
-		File: "redhat-rhmi-operator-availability-rule-codeready-postgres-example-rhmi.yaml",
-		Rules: []string{
-			"codeready-workspacesPostgresInstanceUnavailable",
-		},
-	},
-	{
-		File: "redhat-rhmi-operator-connectivity-rule-codeready-postgres-example-rhmi.yaml",
-		Rules: []string{
-			"codeready-workspacesPostgresConnectionFailed",
-		},
-	},
-	{
-		File: "redhat-rhmi-operator-connectivity-rule-rhssouser-postgres-example-rhmi.yaml",
-		Rules: []string{
+		File: "redhat-rhmi-operator-connectivity-rule-rhssouser-postgres-rhmi.yaml",
+		Rules:[]string{
 			"user-ssoPostgresConnectionFailed",
 		},
 	},
 	{
-		File: "redhat-rhmi-operator-availability-rule-rhssouser-postgres-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-connectivity-rule-threescale-postgres-rhmi.yaml",
 		Rules: []string{
-			"user-ssoPostgresInstanceUnavailable",
+			"3scalePostgresConnectionFailed",
 		},
+
 	},
+
 	{
-		File: "redhat-rhmi-operator-connectivity-rule-rhsso-postgres-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-connectivity-rule-threescale-redis-rhmi.yaml",
 		Rules: []string{
-			"rhssoPostgresConnectionFailed",
+			"3scaleRedisCacheConnectionFailed",
 		},
+
 	},
+
 	{
-		File: "redhat-rhmi-operator-availability-rule-rhsso-postgres-example-rhmi.yaml",
+		File: "redhat-rhmi-operator-availability-rule-threescale-redis-rhmi.yaml",
 		Rules: []string{
-			"rhssoPostgresInstanceUnavailable",
+			"3scaleRedisCacheUnavailable",
 		},
 	},
+	// {
+	// 	File: "redhat-rhmi-operator-connectivity-rule-rhsso-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"rhssoPostgresConnectionFailed",
+	// 	},
+	// },
+	// {
+	// 	File: "redhat-rhmi-operator-availability-rule-rhsso-postgres-example-rhmi.yaml",
+	// 	Rules: []string{
+	// 		"rhssoPostgresInstanceUnavailable",
+	// 	},
+	// },
 }
 
 func TestIntegreatlyAlertsExist(t *testing.T, ctx *TestingContext) {
