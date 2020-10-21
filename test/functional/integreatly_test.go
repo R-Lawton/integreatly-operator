@@ -26,7 +26,7 @@ func TestIntegreatly(t *testing.T) {
 
 		installType, err := common.GetInstallType(config)
 		if err != nil {
-			t.Fatalf("failed to get install type, err: %s", installType)
+			t.Fatalf("failed to get install type, err: %s, %v", installType, err)
 		}
 
 		// get happy path test cases according to the install type
@@ -37,6 +37,15 @@ func TestIntegreatly(t *testing.T) {
 
 		// running functional tests
 		common.RunTestCases(FUNCTIONAL_TESTS, t, config)
+	})
+
+	t.Run("API Managed Multi-AZ Tests", func(t *testing.T) {
+		// Do not execute these tests unless MULTIAZ is set to true
+		if os.Getenv("MULTIAZ") != "true" {
+			t.Skip("Skipping Multi-AZ tests as MULTIAZ env var is not set to true")
+		}
+
+		common.RunTestCases(MULTIAZ_TESTS, t, config)
 	})
 
 	t.Run("Integreatly Destructive Tests", func(t *testing.T) {

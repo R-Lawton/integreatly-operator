@@ -57,7 +57,7 @@ func TestGrafanaExternalRouteDashboardExist(t *testing.T, ctx *TestingContext) {
 	const (
 		serviceAccountName = "test"
 		bindingName        = "test"
-		grafanaNamespace   = "redhat-rhmi-middleware-monitoring-operator"
+		grafanaNamespace   = NamespacePrefix + "middleware-monitoring-operator"
 	)
 
 	//create service account - its token will be used to call grafana api
@@ -165,12 +165,12 @@ func TestGrafanaExternalRouteDashboardExist(t *testing.T, ctx *TestingContext) {
 func getGrafanaRoute(c client.Client) (string, error) {
 	const (
 		routeGrafanaName      = "grafana-route"
-		routeGrafanaNamespace = "redhat-rhmi-middleware-monitoring-operator"
+		routeGrafanaNamespace = NamespacePrefix + "middleware-monitoring-operator"
 	)
-	testCtx := context.TODO()
+	Context := context.TODO()
 	//get grafana openshift route
 	grafanaRoute := &v1.Route{}
-	if err := c.Get(testCtx, client.ObjectKey{Name: routeGrafanaName, Namespace: routeGrafanaNamespace}, grafanaRoute); err != nil {
+	if err := c.Get(Context, client.ObjectKey{Name: routeGrafanaName, Namespace: routeGrafanaNamespace}, grafanaRoute); err != nil {
 		return "", fmt.Errorf("failed to get grafana route: %w", err)
 	}
 	//evaluate the grafana route hostname

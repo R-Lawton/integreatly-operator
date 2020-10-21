@@ -22,18 +22,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/integr8ly/integreatly-operator/pkg/resources"
+	"github.com/integr8ly/integreatly-operator/pkg/resources/global"
+
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	corev1 "k8s.io/api/core/v1"
-	k8sErr "k8s.io/apimachinery/pkg/api/errors"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	integreatlyv1alpha1 "github.com/integr8ly/integreatly-operator/pkg/apis/integreatly/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -74,10 +74,25 @@ func Add(mgr manager.Manager) error {
 	return add(mgr, reconcile)
 }
 
+var (
+	// Map that associates the labels in the namespace to actions to perform
+	// - Keys are labels that might be set to the namespace object
+	// - Values are functions that receive the value of the label, the reconcile request,
+	//   and the reconciler instance.
+	namespaceLabelBasedActions = map[string]func(string, reconcile.Request, *ReconcileNamespaceLabel) error{
+		// Uninstall RHMI
+		"api.openshift.com/addon-rhmi-operator-delete": Uninstall,
+		// Uninstall MAO
+		"api.openshift.com/addon-managed-api-service-delete": Uninstall,
+		// Update CIDR value
+		"cidr": CheckCidrValueAndUpdate,
+	}
+)
+
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) (reconcile.Reconciler, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	operatorNs := "redhat-rhmi-operator"
+	operatorNs := global.NamespacePrefix + "operator"
 
 	return &ReconcileNamespaceLabel{
 		mgr:               mgr,
@@ -134,7 +149,7 @@ func (r *ReconcileNamespaceLabel) Reconcile(request reconcile.Request) (reconcil
 		if err != nil {
 			logrus.Errorf("could not retrieve %s namespace: %v", ns.Name, err)
 		}
-		err = CheckLabel(ns, request, r)
+		err = r.CheckLabel(ns, request)
 
 		if err != nil {
 			return reconcile.Result{}, err
@@ -161,47 +176,44 @@ func GetNS(ctx context.Context, namespace string, client k8sclient.Client) (*cor
 }
 
 // CheckLabel Checks namespace for labels and
-func CheckLabel(o metav1.Object, request reconcile.Request, r *ReconcileNamespaceLabel) error {
+func (r *ReconcileNamespaceLabel) CheckLabel(o metav1.Object, request reconcile.Request) error {
 	for k, v := range o.GetLabels() {
-		if k == "api.openshift.com/addon-rhmi-operator-delete" && v == "true" {
-			err := Uninstall(request, r)
-			if err != nil {
-				return err
-			}
-			return nil
+		action, ok := namespaceLabelBasedActions[k]
+		if !ok {
+			continue
 		}
 
-		if k == "cidr" {
-			err := CheckCidrValueAndUpdate(v, request, r)
-			if err != nil {
-				return err
-			}
-			return nil
+		if err := action(v, request, r); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
 // Uninstall deletes rhmi cr when uninstall label is set
-func Uninstall(request reconcile.Request, r *ReconcileNamespaceLabel) error {
+func Uninstall(v string, request reconcile.Request, r *ReconcileNamespaceLabel) error {
+	if v != "true" {
+		return nil
+	}
 
 	logrus.Info("Uninstall label has been set")
-	rhmi := &integreatlyv1alpha1.RHMI{}
-	err := r.client.Get(context.TODO(), k8sclient.ObjectKey{Name: "rhmi", Namespace: request.NamespacedName.Name}, rhmi)
+
+	rhmiCr, err := resources.GetRhmiCr(r.client, context.TODO(), request.NamespacedName.Namespace)
 	if err != nil {
-		if k8sErr.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return nil
-		}
 		// Error reading the object - requeue the request.
 		return err
 	}
+	if rhmiCr == nil {
+		// Request object not found, could have been deleted after reconcile request.
+		// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+		// Return and don't requeue
+		return nil
+	}
 
-	if rhmi.DeletionTimestamp == nil {
+	if rhmiCr.DeletionTimestamp == nil {
 		logrus.Info("Deleting RHMI CR")
-		err := r.client.Delete(r.context, rhmi)
+		err := r.client.Delete(r.context, rhmiCr)
 		if err != nil {
 			logrus.Errorf("failed to delete RHMI CR: %v", err)
 		}

@@ -3,6 +3,8 @@ package subscription
 import (
 	"context"
 	"fmt"
+	"github.com/integr8ly/integreatly-operator/pkg/resources"
+	"github.com/integr8ly/integreatly-operator/pkg/resources/global"
 	"os"
 	"regexp"
 	"time"
@@ -36,9 +38,17 @@ import (
 
 const (
 	// IntegreatlyPackage - package name is used for Subsription name
-	IntegreatlyPackage = "integreatly"
-	CSVNamePrefix      = "integreatly-operator"
+	IntegreatlyPackage          = "integreatly"
+	CSVNamePrefix               = "integreatly-operator"
+	RHMIAddonSubscription       = "addon-rhmi"
+	ManagedAPIAddonSubscription = "addon-managed-api-service"
 )
+
+var subscriptionsToReconcile []string = []string{
+	IntegreatlyPackage,
+	RHMIAddonSubscription,
+	ManagedAPIAddonSubscription,
+}
 
 // Add creates a new Subscription Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -51,7 +61,7 @@ func Add(mgr manager.Manager) error {
 }
 
 func newReconciler(mgr manager.Manager) (reconcile.Reconciler, error) {
-	operatorNs := "redhat-rhmi-operator"
+	operatorNs := global.NamespacePrefix + "operator"
 
 	restConfig := controllerruntime.GetConfigOrDie()
 	restConfig.Timeout = time.Second * 10
@@ -120,8 +130,7 @@ type ReconcileSubscription struct {
 // In a namespaced installation of integreatly operator it will only reconcile Subscription of the integreatly operator itself
 func (r *ReconcileSubscription) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// skip any Subscriptions that are not integreatly operator
-	if request.Namespace != r.operatorNamespace ||
-		(request.Name != IntegreatlyPackage && request.Name != "addon-rhmi") {
+	if !r.shouldReconcileSubscription(request) {
 		logrus.Infof("not our subscription: %+v, %s", request, r.operatorNamespace)
 		return reconcile.Result{}, nil
 	}
@@ -144,18 +153,30 @@ func (r *ReconcileSubscription) Reconcile(request reconcile.Request) (reconcile.
 		}
 	}
 
-	// TODO: investigate a better approach to getting RHMI rather than hardcoding values
-	installation := &integreatlyv1alpha1.RHMI{}
-	err = r.client.Get(context.TODO(), k8sclient.ObjectKey{Name: "rhmi", Namespace: request.NamespacedName.Namespace}, installation)
+	rhmiCr, err := resources.GetRhmiCr(r.client, context.TODO(), request.NamespacedName.Namespace)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request. Return and don't requeue
-			return reconcile.Result{}, nil
-		}
 		return reconcile.Result{}, err
 	}
+	if rhmiCr == nil {
+		// Request object not found, could have been deleted after reconcile request. Return and don't requeue
+		return reconcile.Result{}, nil
+	}
 
-	return r.HandleUpgrades(context.TODO(), subscription, installation)
+	return r.HandleUpgrades(context.TODO(), subscription, rhmiCr)
+}
+
+func (r *ReconcileSubscription) shouldReconcileSubscription(request reconcile.Request) bool {
+	if request.Namespace != r.operatorNamespace {
+		return false
+	}
+
+	for _, reconcileable := range subscriptionsToReconcile {
+		if request.Name == reconcileable {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *ReconcileSubscription) HandleUpgrades(ctx context.Context, rhmiSubscription *operatorsv1alpha1.Subscription, installation *integreatlyv1alpha1.RHMI) (reconcile.Result, error) {
@@ -229,7 +250,7 @@ func (r *ReconcileSubscription) HandleUpgrades(ctx context.Context, rhmiSubscrip
 	}
 
 	isInstallPlanDeleted := false
-	currentOperatorVersionName := fmt.Sprintf("%s.v%s", CSVNamePrefix, version.Version)
+	currentOperatorVersionName := fmt.Sprintf("%s.v%s", CSVNamePrefix, version.GetVersion())
 	if csvFromCatalogSource.Spec.Replaces != currentOperatorVersionName {
 
 		if csvFromCatalogSource.Spec.Replaces != latestRHMICSV.Spec.Replaces {

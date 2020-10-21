@@ -3,6 +3,7 @@ package common
 import (
 	goctx "context"
 	"fmt"
+	"github.com/integr8ly/integreatly-operator/pkg/resources/global"
 	"math/rand"
 	"strings"
 	"testing"
@@ -54,7 +55,7 @@ func Test3ScaleSMTPConfig(t *testing.T, ctx *TestingContext) {
 		t.Logf("%v", err)
 	}
 
-	t.Log("Patch redhat-rhmi-smtp with new details")
+	t.Log("Patch " + global.NamespacePrefix + "smtp with new details")
 	_, err = patchSecret(ctx, t)
 	if err != nil {
 		t.Log(err)
@@ -113,7 +114,7 @@ func checkHostAddressIsReady(ctx *TestingContext, t *testing.T, retryInterval, t
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 
 		// get console master url
-		rhmi, err := getRHMI(ctx.Client)
+		rhmi, err := GetRHMI(ctx.Client, true)
 		if err != nil {
 			t.Fatalf("error getting RHMI CR: %v", err)
 		}
@@ -232,7 +233,7 @@ func sendTestEmail(ctx *TestingContext, t *testing.T) {
 		t.Fatalf("error while creating testing idp: %v", err)
 	}
 	// get console master url
-	rhmi, err := getRHMI(ctx.Client)
+	rhmi, err := GetRHMI(ctx.Client, true)
 	if err != nil {
 		t.Fatalf("error getting RHMI CR: %v", err)
 	}
@@ -250,9 +251,9 @@ func sendTestEmail(ctx *TestingContext, t *testing.T) {
 	// Login to 3Scale
 	err = loginToThreeScale(t, host, threescaleLoginUser, DefaultPassword, "testing-idp", ctx.HttpClient)
 	if err != nil {
-		// t.Skip("Skipping due to known flaky behavior, to be fixed ASAP.\nJIRA: https://issues.redhat.com/browse/INTLY-8433")
 		dumpAuthResources(ctx.Client, t)
-		t.Fatalf("[%s] error ocurred: %v", getTimeStampPrefix(), err)
+		t.Skip("Skipping due to known flaky behavior, to be fixed ASAP.\nJIRA: https://issues.redhat.com/browse/INTLY-10087")
+		//t.Fatalf("[%s] error ocurred: %v", getTimeStampPrefix(), err)
 	}
 
 	// Make sure 3Scale is available
@@ -288,7 +289,7 @@ func patchReplicationController(ctx *TestingContext, t *testing.T) error {
 	request := ctx.ExtensionClient.RESTClient().Patch(types.MergePatchType).
 		Resource("deploymentconfigs").
 		Name("system-app").
-		Namespace("redhat-rhmi-3scale").
+		Namespace(NamespacePrefix + "3scale").
 		RequestURI("/apis/apps.openshift.io/v1").Body(replicaBytes).Do()
 	_, err := request.Raw()
 
@@ -299,7 +300,7 @@ func patchReplicationController(ctx *TestingContext, t *testing.T) error {
 	request = ctx.ExtensionClient.RESTClient().Patch(types.MergePatchType).
 		Resource("deploymentconfigs").
 		Name("system-sidekiq").
-		Namespace("redhat-rhmi-3scale").
+		Namespace(NamespacePrefix + "3scale").
 		RequestURI("/apis/apps.openshift.io/v1").Body(replicaBytes).Do()
 	_, err = request.Raw()
 
@@ -320,8 +321,8 @@ func resetSecret(ctx *TestingContext, t *testing.T) (string, error) {
 
 	secret = v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "redhat-rhmi-smtp",
-			Namespace: "redhat-rhmi-operator",
+			Name:      NamespacePrefix + "smtp",
+			Namespace: NamespacePrefix + "operator",
 		},
 		Data: map[string][]byte{},
 	}
@@ -353,8 +354,8 @@ func patchSecret(ctx *TestingContext, t *testing.T) (string, error) {
 
 	secret = v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "redhat-rhmi-smtp",
-			Namespace: "redhat-rhmi-operator",
+			Name:      NamespacePrefix + "smtp",
+			Namespace: NamespacePrefix + "operator",
 		},
 		Data: map[string][]byte{},
 	}
@@ -374,7 +375,7 @@ func patchSecret(ctx *TestingContext, t *testing.T) (string, error) {
 func getSecret(ctx *TestingContext) (v1.Secret, error) {
 
 	secret := &v1.Secret{}
-	if err := ctx.Client.Get(goctx.TODO(), types.NamespacedName{Name: "redhat-rhmi-smtp", Namespace: "redhat-rhmi-operator"}, secret); err != nil {
+	if err := ctx.Client.Get(goctx.TODO(), types.NamespacedName{Name: NamespacePrefix + "smtp", Namespace: NamespacePrefix + "operator"}, secret); err != nil {
 		return *secret, err
 	}
 	return *secret, nil
@@ -383,7 +384,7 @@ func getSecret(ctx *TestingContext) (v1.Secret, error) {
 func get3scaleSecret(ctx *TestingContext) (v1.Secret, error) {
 
 	secret := &v1.Secret{}
-	if err := ctx.Client.Get(goctx.TODO(), types.NamespacedName{Name: "system-smtp", Namespace: "redhat-rhmi-3scale"}, secret); err != nil {
+	if err := ctx.Client.Get(goctx.TODO(), types.NamespacedName{Name: "system-smtp", Namespace: NamespacePrefix + "3scale"}, secret); err != nil {
 		return *secret, err
 	}
 	return *secret, nil

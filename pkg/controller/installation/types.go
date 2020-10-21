@@ -12,7 +12,7 @@ type Stage struct {
 }
 
 var (
-	allManaged3scaleStages = &Type{
+	allManagedApiStages = &Type{
 		[]Stage{
 			{
 				Name: integreatlyv1alpha1.BootstrapStage,
@@ -45,6 +45,8 @@ var (
 				Products: map[integreatlyv1alpha1.ProductName]integreatlyv1alpha1.RHMIProductStatus{
 					integreatlyv1alpha1.Product3Scale:    {Name: integreatlyv1alpha1.Product3Scale},
 					integreatlyv1alpha1.ProductRHSSOUser: {Name: integreatlyv1alpha1.ProductRHSSOUser},
+					integreatlyv1alpha1.ProductMarin3r:   {Name: integreatlyv1alpha1.ProductMarin3r},
+					integreatlyv1alpha1.ProductGrafana:   {Name: integreatlyv1alpha1.ProductGrafana},
 				},
 			},
 		},
@@ -55,6 +57,8 @@ var (
 					integreatlyv1alpha1.ProductRHSSO:     {Name: integreatlyv1alpha1.ProductRHSSO},
 					integreatlyv1alpha1.Product3Scale:    {Name: integreatlyv1alpha1.Product3Scale},
 					integreatlyv1alpha1.ProductRHSSOUser: {Name: integreatlyv1alpha1.ProductRHSSOUser},
+					integreatlyv1alpha1.ProductMarin3r:   {Name: integreatlyv1alpha1.ProductMarin3r},
+					integreatlyv1alpha1.ProductGrafana:   {Name: integreatlyv1alpha1.ProductGrafana},
 				},
 			},
 			{
@@ -322,8 +326,8 @@ func TypeFactory(installationType string) (*Type, error) {
 		return newWorkshopType(), nil
 	case string(integreatlyv1alpha1.InstallationTypeManaged):
 		return newManagedType(), nil
-	case string(integreatlyv1alpha1.InstallationTypeManaged3scale):
-		return newManaged3scaleType(), nil
+	case string(integreatlyv1alpha1.InstallationTypeManagedApi):
+		return newManagedApiType(), nil
 	case string(integreatlyv1alpha1.InstallationTypeSelfManaged):
 		return newSelfManagedType(), nil
 	default:
@@ -339,8 +343,8 @@ func newManagedType() *Type {
 	return allManagedStages
 }
 
-func newManaged3scaleType() *Type {
-	return allManaged3scaleStages
+func newManagedApiType() *Type {
+	return allManagedApiStages
 }
 
 func newSelfManagedType() *Type {

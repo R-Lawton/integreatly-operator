@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/integr8ly/integreatly-operator/pkg/resources/global"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -40,7 +41,7 @@ const (
 	DefaultWaitForMaintenance = true
 
 	// Maximum allowed number of days to schedule an upgrade via `NotBeforeDays`
-	MaxUpgradeDays = 14
+	// MaxUpgradeDays = 14
 )
 
 // RHMIConfigSpec defines the desired state of RHMIConfig
@@ -104,6 +105,8 @@ type Upgrade struct {
 	// +optional
 	// +nullable
 	NotBeforeDays *int `json:"notBeforeDays,omitempty"`
+
+	Schedule *bool `json:"schedule,omitempty"`
 }
 
 type Maintenance struct {
@@ -166,9 +169,6 @@ func (c *RHMIConfig) ValidateUpdate(old runtime.Object) error {
 		if notBeforeDays < 0 {
 			return errors.New("Value of spec.Upgrade.NotBeforeDays must be greater or equal to zero")
 		}
-		if notBeforeDays > MaxUpgradeDays {
-			return fmt.Errorf("Value of spec.Upgrade.NotBeforeDays must be less than or equal to %d", MaxUpgradeDays)
-		}
 	}
 
 	return nil
@@ -202,7 +202,7 @@ func (h *rhmiConfigMutatingHandler) Handle(ctx context.Context, request admissio
 		rhmiConfig.Annotations = map[string]string{}
 	}
 
-	if request.UserInfo.Username != "system:serviceaccount:redhat-rhmi-operator:rhmi-operator" {
+	if request.UserInfo.Username != "system:serviceaccount:"+global.NamespacePrefix+"operator:rhmi-operator" {
 		rhmiConfig.Annotations["lastEditUsername"] = request.UserInfo.Username
 		rhmiConfig.Annotations["lastEditTimestamp"] = time.Now().UTC().Format(DateFormat)
 	}
@@ -251,6 +251,7 @@ func (h *rhmiConfigMutatingHandler) Handle(ctx context.Context, request admissio
 func (u *Upgrade) DefaultIfEmpty() {
 	u.NotBeforeDays = either(u.NotBeforeDays, DefaultNotBeforeDays).(*int)
 	u.WaitForMaintenance = either(u.WaitForMaintenance, DefaultWaitForMaintenance).(*bool)
+	u.Schedule = either(u.Schedule, false).(*bool)
 }
 
 func init() {

@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	goctx "context"
 	"fmt"
 	"os"
 	"path"
@@ -22,7 +21,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -48,7 +46,7 @@ func TestIntegreatly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
 	}
-	ctx := framework.NewTestCtx(t)
+	ctx := framework.NewContext(t)
 	err = ctx.InitializeClusterResources(&framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	if err != nil {
 		t.Fatalf("failed to initialize cluster resources: %v", err)
@@ -117,7 +115,7 @@ func TestIntegreatly(t *testing.T) {
 	}
 }
 
-func waitForProductDeployment(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, product, deploymentName string) error {
+func waitForProductDeployment(t *testing.T, f *framework.Framework, ctx *framework.Context, product, deploymentName string) error {
 	namespace := ""
 	if deploymentName != "enmasse-operator" {
 		namespace = common.NamespacePrefix + product + "-operator"
@@ -142,7 +140,7 @@ func waitForProductDeployment(t *testing.T, f *framework.Framework, ctx *framewo
 	return nil
 }
 
-func integreatlyManagedTest(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) error {
+func integreatlyManagedTest(t *testing.T, f *framework.Framework, ctx *framework.Context) error {
 
 	installType, err := common.GetInstallType(f.KubeConfig)
 	if err != nil {
@@ -207,7 +205,7 @@ func integreatlyManagedTest(t *testing.T, f *framework.Framework, ctx *framework
 		"apicurito":            "apicurito-operator",
 	}
 
-	if installType == string(integreatlyv1alpha1.InstallationTypeManaged3scale) {
+	if installType == string(integreatlyv1alpha1.InstallationTypeManagedApi) {
 		products = map[string]string{
 			"3scale": "3scale-operator",
 		}
@@ -226,7 +224,7 @@ func integreatlyManagedTest(t *testing.T, f *framework.Framework, ctx *framework
 		return err
 	}
 
-	if installType != string(integreatlyv1alpha1.InstallationTypeManaged3scale) {
+	if installType != string(integreatlyv1alpha1.InstallationTypeManagedApi) {
 		// wait for solution-explorer operator to deploy
 		err = waitForProductDeployment(t, f, ctx, string(integreatlyv1alpha1.ProductSolutionExplorer), "tutorial-web-app-operator")
 		if err != nil {
@@ -245,13 +243,12 @@ func integreatlyManagedTest(t *testing.T, f *framework.Framework, ctx *framework
 
 func waitForInstallationStageCompletion(t *testing.T, f *framework.Framework, namespace string, retryInterval, timeout time.Duration, phase string) error {
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		installation := &integreatlyv1alpha1.RHMI{}
-		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: common.InstallationName, Namespace: namespace}, installation)
+		installation, err := common.GetRHMI(f.Client.Client, false)
+		if installation == nil {
+			t.Logf("Waiting for availability of rhmi installation in namespace: %s, phase: %s\n", namespace, phase)
+			return false, nil
+		}
 		if err != nil {
-			if apierrors.IsNotFound(err) {
-				t.Logf("Waiting for availability of %s installation in namespace: %s, phase: %s\n", common.InstallationName, namespace, phase)
-				return false, nil
-			}
 			return false, err
 		}
 
@@ -260,7 +257,7 @@ func waitForInstallationStageCompletion(t *testing.T, f *framework.Framework, na
 			return true, nil
 		}
 
-		t.Logf("Waiting for completion of %s\n", phase)
+		t.Logf("Waiting for completion of %s, current state:%s\n", phase, phaseStatus)
 		if installation.Status.LastError != "" {
 			t.Logf("Last Error: %s\n", installation.Status.LastError)
 		}
@@ -273,7 +270,7 @@ func waitForInstallationStageCompletion(t *testing.T, f *framework.Framework, na
 	return nil
 }
 
-func IntegreatlyCluster(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) error {
+func IntegreatlyCluster(t *testing.T, f *framework.Framework, ctx *framework.Context) error {
 	namespace, err := ctx.GetNamespace()
 	// Create SMTP Secret
 	installationPrefix, found := os.LookupEnv("INSTALLATION_PREFIX")
@@ -330,6 +327,28 @@ func IntegreatlyCluster(t *testing.T, f *framework.Framework, ctx *framework.Tes
 	err = f.Client.Create(context.TODO(), dmsSecret, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("create dead mans snitch secret : %w", err)
+	}
+
+	// create rate limits config map
+	rlConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sku-limits-managed-api-service",
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			"rate_limit": `
+			{
+				"RHOAM SERVICE SKU": {
+					"unit": "minute",
+					"requests_per_unit": 13860
+				}
+			}
+			`,
+		},
+	}
+	err = f.Client.Create(context.TODO(), rlConfigMap, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create rate limits config map: %w", err)
 	}
 
 	// wait for integreatly-operator to be ready

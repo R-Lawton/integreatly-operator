@@ -25,10 +25,10 @@ var (
 	PhaseCompleted  StatusPhase = "completed"
 	PhaseFailed     StatusPhase = "failed"
 
-	InstallationTypeWorkshop      InstallationType = "workshop"
-	InstallationTypeManaged       InstallationType = "managed"
-	InstallationTypeManaged3scale InstallationType = "managed-3scale"
-	InstallationTypeSelfManaged   InstallationType = "self-managed"
+	InstallationTypeWorkshop    InstallationType = "workshop"
+	InstallationTypeManaged     InstallationType = "managed"
+	InstallationTypeManagedApi  InstallationType = "managed-api"
+	InstallationTypeSelfManaged InstallationType = "self-managed"
 
 	BootstrapStage               StageName = "bootstrap"
 	CloudResourcesStage          StageName = "cloud-resources"
@@ -56,6 +56,8 @@ var (
 	ProductCloudResources      ProductName = "cloud-resources"
 	ProductDataSync            ProductName = "datasync"
 	ProductMonitoringSpec      ProductName = "monitoring-spec"
+	ProductMarin3r             ProductName = "marin3r"
+	ProductGrafana             ProductName = "grafana"
 
 	// Could not find a way to determine these versions dynamically, so they are hard-coded
 	// It is preferable to determine the version of a product dynamically (from a CR, or configmap, etc)
@@ -69,13 +71,15 @@ var (
 	VersionMonitoring          ProductVersion = "1.2.1"
 	Version3Scale              ProductVersion = "2.9"
 	VersionUps                 ProductVersion = "2.3.2"
-	VersionCloudResources      ProductVersion = "0.22.0"
+	VersionCloudResources      ProductVersion = "0.22.2"
 	VersionFuseOnline          ProductVersion = "7.6"
 	VersionDataSync            ProductVersion = "0.9.4"
 	VersionRHSSO               ProductVersion = "7.4"
 	VersionRHSSOUser           ProductVersion = "7.4"
 	VersionMonitoringSpec      ProductVersion = "1.0"
 	VersionSolutionExplorer    ProductVersion = "2.28.0"
+	VersionMarin3r             ProductVersion = "0.5.1"
+	VersionGrafana             ProductVersion = "3.5.0"
 
 	// Versioning for Fuse on OpenShift does not follow a similar pattern to other products.
 	// It is currently implicitly tied to version 7.6 of Fuse, hence the 7.6 value for VersionFuseOnOpenshift above
@@ -99,11 +103,13 @@ var (
 	OperatorVersionCodeReadyWorkspaces OperatorVersion = "2.1.1"
 	OperatorVersion3Scale              OperatorVersion = "0.6.0"
 	OperatorVersionFuse                OperatorVersion = "1.6.0"
-	OperatorVersionCloudResources      OperatorVersion = "0.22.0"
+	OperatorVersionCloudResources      OperatorVersion = "0.22.2"
 	OperatorVersionUPS                 OperatorVersion = "0.5.0"
 	OperatorVersionApicurioRegistry    OperatorVersion = "0.0.3"
 	OperatorVersionApicurito           OperatorVersion = "1.6.0"
 	OperatorVersionMonitoringSpec      OperatorVersion = "1.0"
+	OperatorVersionMarin3r             OperatorVersion = "0.5.1"
+	OperatorVersionGrafana             OperatorVersion = "3.5.0"
 
 	// Event reasons to be used when emitting events
 	EventProcessingError       string = "ProcessingError"

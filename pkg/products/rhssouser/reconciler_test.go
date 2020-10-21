@@ -23,6 +23,7 @@ import (
 	"github.com/integr8ly/integreatly-operator/pkg/resources"
 	"github.com/integr8ly/integreatly-operator/pkg/resources/marketplace"
 	keycloak "github.com/keycloak/keycloak-operator/pkg/apis/keycloak/v1alpha1"
+	consolev1 "github.com/openshift/api/console/v1"
 
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	projectv1 "github.com/openshift/api/project/v1"
@@ -34,6 +35,7 @@ import (
 	coreosv1 "github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1"
 	operatorsv1alpha1 "github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
 	marketplacev1 "github.com/operator-framework/operator-marketplace/pkg/apis/operators/v1"
+	appsv1 "k8s.io/api/apps/v1"
 
 	crov1 "github.com/integr8ly/cloud-resource-operator/pkg/apis/integreatly/v1alpha1"
 	croTypes "github.com/integr8ly/cloud-resource-operator/pkg/apis/integreatly/v1alpha1/types"
@@ -114,6 +116,10 @@ func getBuildScheme() (*runtime.Scheme, error) {
 	if err != nil {
 		return nil, err
 	}
+	err = appsv1.SchemeBuilder.AddToScheme(scheme)
+	if err != nil {
+		return nil, err
+	}
 	err = coreosv1.SchemeBuilder.AddToScheme(scheme)
 	if err != nil {
 		return nil, err
@@ -144,6 +150,9 @@ func getBuildScheme() (*runtime.Scheme, error) {
 	}
 	err = monitoringv1.SchemeBuilder.AddToScheme(scheme)
 	if err != nil {
+		return nil, err
+	}
+	if err := consolev1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, err
@@ -515,6 +524,16 @@ func TestReconciler_fullReconcile(t *testing.T) {
 		Type: corev1.SecretTypeOpaque,
 	}
 
+	statefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "keycloak",
+			Namespace: defaultNamespace,
+			Labels: map[string]string{
+				"app": "keycloak",
+			},
+		},
+	}
+
 	cases := []struct {
 		Name                  string
 		ExpectError           bool
@@ -533,7 +552,7 @@ func TestReconciler_fullReconcile(t *testing.T) {
 		{
 			Name:            "test successful reconcile",
 			ExpectedStatus:  integreatlyv1alpha1.PhaseCompleted,
-			FakeClient:      moqclient.NewSigsClientMoqWithScheme(scheme, getKcr(keycloak.KeycloakRealmStatus{Phase: keycloak.PhaseReconciling}), kc, secret, ns, operatorNS, githubOauthSecret, oauthClientSecrets, installation, edgeRoute, group, croPostgresSecret, croPostgres, getRHSSOCredentialSeed()),
+			FakeClient:      moqclient.NewSigsClientMoqWithScheme(scheme, getKcr(keycloak.KeycloakRealmStatus{Phase: keycloak.PhaseReconciling}), kc, secret, ns, operatorNS, githubOauthSecret, oauthClientSecrets, installation, edgeRoute, group, croPostgresSecret, croPostgres, getRHSSOCredentialSeed(), statefulSet),
 			FakeOauthClient: fakeoauthClient.NewSimpleClientset([]runtime.Object{}...).OauthV1(),
 			FakeConfig:      basicConfigMock(),
 			FakeMPM: &marketplace.MarketplaceInterfaceMock{

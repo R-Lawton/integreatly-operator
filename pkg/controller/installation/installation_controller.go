@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/integr8ly/integreatly-operator/pkg/webhooks"
 	"github.com/integr8ly/integreatly-operator/version"
 
+	"github.com/integr8ly/integreatly-operator/pkg/resources/global"
+	"github.com/integr8ly/integreatly-operator/pkg/webhooks"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,6 +26,7 @@ import (
 	"github.com/integr8ly/integreatly-operator/pkg/products"
 	"github.com/integr8ly/integreatly-operator/pkg/resources"
 	"github.com/integr8ly/integreatly-operator/pkg/resources/marketplace"
+
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 
 	corev1 "k8s.io/api/core/v1"
@@ -47,15 +49,16 @@ import (
 const (
 	deletionFinalizer                = "finalizer/configmaps"
 	DefaultInstallationName          = "rhmi"
+	ManagedApiInstallationName       = "managed-api"
 	DefaultInstallationConfigMapName = "installation-config"
-	DefaultInstallationPrefix        = "redhat-rhmi-"
 	DefaultCloudResourceConfigName   = "cloud-resource-config"
 	alertingEmailAddressEnvName      = "ALERTING_EMAIL_ADDRESS"
 	installTypeEnvName               = "INSTALLATION_TYPE"
 )
 
 var (
-	allProductsReconciled = false
+	DefaultInstallationPrefix   = global.NamespacePrefix
+	productVersionMismatchFound bool
 )
 
 // Add creates a new Installation Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -159,7 +162,7 @@ func createInstallationCR(ctx context.Context, serverClient k8sclient.Client) er
 
 		installation = &integreatlyv1alpha1.RHMI{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      DefaultInstallationName,
+				Name:      getCrName(installType),
 				Namespace: namespace,
 			},
 			Spec: integreatlyv1alpha1.RHMISpec{
@@ -182,10 +185,18 @@ func createInstallationCR(ctx context.Context, serverClient k8sclient.Client) er
 	} else if len(installationList.Items) == 1 {
 		installation = &installationList.Items[0]
 	} else {
-		return fmt.Errorf("Too many rhmi resources found. Expecting 1, found %s rhmi resources in %s namespace", string(len(installationList.Items)), namespace)
+		return fmt.Errorf("too many rhmi resources found. Expecting 1, found %d rhmi resources in %s namespace", len(installationList.Items), namespace)
 	}
 
 	return nil
+}
+
+func getCrName(installType string) string {
+	if installType == string(integreatlyv1alpha1.InstallationTypeManagedApi) {
+		return ManagedApiInstallationName
+	} else {
+		return DefaultInstallationName
+	}
 }
 
 var _ reconcile.Reconciler = &ReconcileInstallation{}
@@ -278,8 +289,8 @@ func (r *ReconcileInstallation) Reconcile(request reconcile.Request) (reconcile.
 
 	// If no current or target version is set this is the first installation of rhmi.
 	if upgradeFirstReconcile(installation) || firstInstallFirstReconcile(installation) {
-		installation.Status.ToVersion = version.IntegreatlyVersion
-		logrus.Infof("Setting installation.Status.ToVersion on initial install %s", version.IntegreatlyVersion)
+		installation.Status.ToVersion = version.GetVersionByType(installation.Spec.Type)
+		logrus.Infof("Setting installation.Status.ToVersion on initial install %s", version.GetVersionByType(installation.Spec.Type))
 		if err := r.client.Status().Update(context.TODO(), installation); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -338,36 +349,24 @@ func (r *ReconcileInstallation) Reconcile(request reconcile.Request) (reconcile.
 		}
 	}
 
-	logrus.Infof("installInProgress=%v", installInProgress)
-	// UPDATE STATUS
-	// updates rhmi status metric according to the status of the products
-	if !installInProgress {
-		installation.Status.Stage = integreatlyv1alpha1.StageName("complete")
-	}
-	metrics.SetRHMIStatus(installation)
-
-	// Check if the version needs to be updated
-	if (firstInstallInProgress(installation) || upgradeInProgress(installation)) && allProductsReconciled {
-		installation.Status.Version = installation.Status.ToVersion
+	// Entered on first reconcile where all stages reported complete after an upgrade / install
+	if installation.Status.ToVersion == version.GetVersionByType(installation.Spec.Type) && !installInProgress && !productVersionMismatchFound {
+		installation.Status.Version = version.GetVersionByType(installation.Spec.Type)
 		installation.Status.ToVersion = ""
 		metrics.SetRhmiVersions(string(installation.Status.Stage), installation.Status.Version, installation.Status.ToVersion, installation.CreationTimestamp.Unix())
+		logrus.Infof("installation completed successfully")
+	}
+
+	// Entered on every reconcile where all stages reported complete
+	if !installInProgress {
+		installation.Status.Stage = integreatlyv1alpha1.StageName("complete")
+		metrics.RHMIStatusAvailable.Set(1)
+		retryRequeue.RequeueAfter = 5 * time.Minute
 	}
 	metrics.SetRHMIStatus(installation)
 
 	err = r.updateStatusAndObject(originalInstallation, installation)
-	if err != nil {
-		return retryRequeue, err
-	}
-
-	// installation completed
-	if !installInProgress {
-		metrics.RHMIStatusAvailable.Set(1)
-		logrus.Infof("installation completed succesfully")
-		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Minute}, nil
-	}
-
-	//installation still in progress
-	return retryRequeue, nil
+	return retryRequeue, err
 }
 
 func (r *ReconcileInstallation) updateStatusAndObject(original, installation *integreatlyv1alpha1.RHMI) error {
@@ -531,10 +530,6 @@ func (r *ReconcileInstallation) handleUninstall(installation *integreatlyv1alpha
 	return retryRequeue, err
 }
 
-func firstInstallInProgress(installation *integreatlyv1alpha1.RHMI) bool {
-	return installation.Status.Version == ""
-}
-
 func firstInstallFirstReconcile(installation *integreatlyv1alpha1.RHMI) bool {
 	status := installation.Status
 	return status.Version == "" && status.ToVersion == ""
@@ -544,15 +539,7 @@ func firstInstallFirstReconcile(installation *integreatlyv1alpha1.RHMI) bool {
 // In which case the toVersion field has not been set
 func upgradeFirstReconcile(installation *integreatlyv1alpha1.RHMI) bool {
 	status := installation.Status
-	return status.Version != "" && status.ToVersion == "" && status.Version != version.IntegreatlyVersion
-}
-
-func upgradeInProgress(installation *integreatlyv1alpha1.RHMI) bool {
-	status := installation.Status
-	if status.ToVersion != "" {
-		return true
-	}
-	return false
+	return status.Version != "" && status.ToVersion == "" && status.Version != version.GetVersionByType(installation.Spec.Type)
 }
 
 func (r *ReconcileInstallation) preflightChecks(installation *integreatlyv1alpha1.RHMI, installationType *Type, configManager *config.Manager) (reconcile.Result, error) {
@@ -573,7 +560,7 @@ func (r *ReconcileInstallation) preflightChecks(installation *integreatlyv1alpha
 		return result, nil
 	}
 
-	if installation.Spec.Type == string(integreatlyv1alpha1.InstallationTypeManaged) || installation.Spec.Type == string(integreatlyv1alpha1.InstallationTypeManaged3scale) {
+	if installation.Spec.Type == string(integreatlyv1alpha1.InstallationTypeManaged) || installation.Spec.Type == string(integreatlyv1alpha1.InstallationTypeManagedApi) {
 		requiredSecrets := []string{installation.Spec.PagerDutySecret, installation.Spec.DeadMansSnitchSecret}
 
 		for _, secretName := range requiredSecrets {
@@ -691,6 +678,8 @@ func (r *ReconcileInstallation) bootstrapStage(installation *integreatlyv1alpha1
 
 func (r *ReconcileInstallation) processStage(installation *integreatlyv1alpha1.RHMI, stage *Stage, configManager config.ConfigReadWriter) (integreatlyv1alpha1.StatusPhase, error) {
 	incompleteStage := false
+	productVersionMismatchFound = false
+
 	var mErr error
 	productsAux := make(map[integreatlyv1alpha1.ProductName]integreatlyv1alpha1.RHMIProductStatus)
 	installation.Status.Stage = stage.Name
@@ -700,7 +689,11 @@ func (r *ReconcileInstallation) processStage(installation *integreatlyv1alpha1.R
 		if err != nil {
 			return integreatlyv1alpha1.PhaseFailed, fmt.Errorf("failed to build a reconciler for %s: %w", product.Name, err)
 		}
-		allProductsReconciled = reconciler.VerifyVersion(installation)
+
+		if !reconciler.VerifyVersion(installation) {
+			productVersionMismatchFound = true
+		}
+
 		serverClient, err := k8sclient.New(r.restConfig, k8sclient.Options{})
 		if err != nil {
 			return integreatlyv1alpha1.PhaseFailed, fmt.Errorf("could not create server client: %w", err)

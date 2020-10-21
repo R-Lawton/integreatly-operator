@@ -1,19 +1,22 @@
 include ./make/*.mk
 
 ORG ?= integreatly
-NAMESPACE=redhat-rhmi-operator
+NAMESPACE_PREFIX ?= redhat-rhmi-
+NAMESPACE=$(NAMESPACE_PREFIX)operator
 PROJECT=integreatly-operator
 REG=quay.io
 SHELL=/bin/bash
 TAG ?= 2.7.0
+MGDAPI_TAG ?= 0.1.0-rc2
 PKG=github.com/integr8ly/integreatly-operator
 TEST_DIRS?=$(shell sh -c "find $(TOP_SRC_DIRS) -name \\*_test.go -exec dirname {} \\; | sort | uniq")
 TEST_POD_NAME=integreatly-operator-test
 COMPILE_TARGET=./tmp/_output/bin/$(PROJECT)
-OPERATOR_SDK_VERSION=0.15.1
+OPERATOR_SDK_VERSION=0.17.1
 AUTH_TOKEN=$(shell curl -sH "Content-Type: application/json" -XPOST https://quay.io/cnr/api/v1/users/login -d '{"user": {"username": "$(QUAY_USERNAME)", "password": "$(QUAY_PASSWORD)"}}' | jq -r '.token')
 TEMPLATE_PATH="$(shell pwd)/templates/monitoring"
 INTEGREATLY_OPERATOR_IMAGE ?= $(REG)/$(ORG)/$(PROJECT):v$(TAG)
+MANAGED_API_OPERATOR_IMAGE ?= $(REG)/$(ORG)/managed-api-service:v$(MGDAPI_TAG)
 CONTAINER_ENGINE ?= docker
 TEST_RESULTS_DIR ?= "test-results"
 TEMP_SERVICEACCOUNT_NAME="rhmi-operator"
@@ -67,20 +70,25 @@ setup/service_account:
 	@oc project $(NAMESPACE)
 	@oc replace --force -f deploy/role.yaml
 	@-oc create -f deploy/service_account.yaml -n $(NAMESPACE)
-	@cat deploy/role_binding.yaml | sed "s/namespace: integreatly/namespace: $(NAMESPACE)/g" | oc replace --force -f -
+	@cat deploy/$(INSTALLATION_PREFIX)/role_binding.yaml | sed "s/namespace: integreatly/namespace: $(NAMESPACE)/g" | oc replace --force -f -
 	@oc login --token=$(shell oc serviceaccounts get-token rhmi-operator -n ${NAMESPACE}) --server=${CLUSTER_URL} --kubeconfig=TMP_SA_KUBECONFIG
 
 .PHONY: setup/git/hooks
 setup/git/hooks:
 	git config core.hooksPath .githooks
 
+.PHONE: code/setNamespace
+code/setNamespace:
+	@echo	$(NAMESPACE)
+	@ $(SED_INLINE) 's/NamespacePrefix = .*/NamespacePrefix = \"$(NAMESPACE_PREFIX)\"/g' pkg/resources/global/global.go
+
 .PHONY: code/run
 code/run: code/gen cluster/prepare/smtp cluster/prepare/dms cluster/prepare/pagerduty setup/service_account
-	@KUBECONFIG=TMP_SA_KUBECONFIG $(OPERATOR_SDK) run --local --namespace="$(NAMESPACE)"
+	@KUBECONFIG=TMP_SA_KUBECONFIG $(OPERATOR_SDK) run --local --watch-namespace="$(NAMESPACE)"
 
 .PHONY: code/rerun
 code/rerun: setup/service_account
-	@KUBECONFIG=TMP_SA_KUBECONFIG $(OPERATOR_SDK) run --local --namespace="$(NAMESPACE)"
+	@KUBECONFIG=TMP_SA_KUBECONFIG $(OPERATOR_SDK) run --local --watch-namespace="$(NAMESPACE)"
 
 .PHONY: code/run/service_account
 code/run/service_account: code/run
@@ -107,8 +115,7 @@ pkg/apis/integreatly/v1alpha1/zz_generated.deepcopy.go:	pkg/apis/integreatly/v1a
 	$(OPERATOR_SDK) generate k8s
 
 .PHONY: code/gen
-code/gen: setup/moq deploy/crds/integreatly.org_rhmis_crd.yaml pkg/apis/integreatly/v1alpha1/zz_generated.deepcopy.go pkg/apis/integreatly/v1alpha1/zz_generated.openapi.go
-	find ./ -name *_moq.go -type f -not -path "./vendor/*" -delete
+code/gen: code/setNamespace setup/moq deploy/crds/integreatly.org_rhmis_crd.yaml pkg/apis/integreatly/v1alpha1/zz_generated.deepcopy.go pkg/apis/integreatly/v1alpha1/zz_generated.openapi.go
 	@go generate ./...
 
 .PHONY: code/check
@@ -141,26 +148,39 @@ test/unit:
 	@TEMPLATE_PATH=$(TEMPLATE_PATH) ./scripts/ci/unit_test.sh
 
 .PHONY: test/e2e/prow
-test/e2e/prow: export SURF_DEBUG_HEADERS=1
 test/e2e/prow: export component := integreatly-operator
 test/e2e/prow: export INTEGREATLY_OPERATOR_IMAGE := "${IMAGE_FORMAT}"
 test/e2e/prow: test/e2e
 
+.PHONY: test/e2e/rhoam/prow
+test/e2e/rhoam/prow: export component := integreatly-operator
+test/e2e/rhoam/prow: export INTEGREATLY_OPERATOR_IMAGE := "${IMAGE_FORMAT}"
+test/e2e/rhoam/prow: test/e2e/rhoam
+
+.PHONY: test/e2e/rhoam
+test/e2e/rhoam: export INSTALLATION_TYPE := "managed-api"
+test/e2e/rhoam:  cluster/cleanup cluster/cleanup/crds cluster/prepare cluster/prepare/crd deploy/integreatly-rhmi-cr.yml
+	$(OPERATOR_SDK) --verbose test local ./test/e2e --operator-namespace="$(NAMESPACE)" --go-test-flags "-timeout=120m" --debug --image=$(INTEGREATLY_OPERATOR_IMAGE)
+
 .PHONY: test/e2e
 test/e2e:  export SURF_DEBUG_HEADERS=1
 test/e2e:  cluster/cleanup cluster/cleanup/crds cluster/prepare cluster/prepare/crd deploy/integreatly-rhmi-cr.yml
-	 export SURF_DEBUG_HEADERS=1
-	$(OPERATOR_SDK) --verbose test local ./test/e2e --namespace="$(NAMESPACE)" --go-test-flags "-timeout=90m" --debug --image=$(INTEGREATLY_OPERATOR_IMAGE)
+	$(OPERATOR_SDK) --verbose test local ./test/e2e --operator-namespace="$(NAMESPACE)" --go-test-flags "-timeout=120m" --debug --image=$(INTEGREATLY_OPERATOR_IMAGE)
 
 .PHONY: test/e2e/local
 test/e2e/local: cluster/cleanup cluster/cleanup/crds cluster/prepare cluster/prepare/crd deploy/integreatly-rhmi-cr.yml
-	$(OPERATOR_SDK) --verbose test local ./test/e2e --namespace="$(NAMESPACE)" --go-test-flags "-timeout=90m" --debug --up-local
+	$(OPERATOR_SDK) --verbose test local ./test/e2e --watch-namespace="$(NAMESPACE)" --operator-namespace="${NAMESPACE}" --go-test-flags "-timeout=120m" --debug --up-local
 
 
 .PHONY: test/functional
 test/functional:
 	# Run the functional tests against an existing cluster. Make sure you have logged in to the cluster.
 	go clean -testcache && go test -v ./test/functional -timeout=80m
+
+.PHONY: test/osde2e
+test/osde2e:
+	# Run the osde2e tests against an existing cluster. Make sure you have logged in to the cluster.
+	go clean -testcache && go test -v ./test/osde2e -timeout=80m
 
 .PHONY: test/products/local
 test/products/local:
@@ -198,7 +218,7 @@ cluster/deploy/integreatly-rhmi-cr.yml: deploy/integreatly-rhmi-cr.yml
 	$(call wait_command, oc get RHMI $(INSTALLATION_NAME) -n $(NAMESPACE) --output=json -o jsonpath='{.status.stages.solution-explorer.phase}' | grep -q completed, solution-explorer phase, 10m, 30)
 
 .PHONY: cluster/prepare
-cluster/prepare: cluster/prepare/project cluster/prepare/osrc cluster/prepare/configmaps cluster/prepare/smtp cluster/prepare/dms cluster/prepare/pagerduty cluster/prepare/delorean
+cluster/prepare: cluster/prepare/project cluster/prepare/osrc cluster/prepare/configmaps cluster/prepare/smtp cluster/prepare/dms cluster/prepare/pagerduty cluster/prepare/ratelimits cluster/prepare/delorean
 
 .PHONY: cluster/prepare/bundle
 cluster/prepare/bundle: cluster/prepare/project cluster/prepare/configmaps cluster/prepare/smtp cluster/prepare/dms cluster/prepare/pagerduty cluster/prepare/delorean
@@ -231,10 +251,10 @@ cluster/prepare/crd:
 	- oc create -f deploy/crds/integreatly.org_rhmiconfigs_crd.yaml
 
 .PHONY: cluster/prepare/local
-cluster/prepare/local: cluster/prepare/project cluster/prepare/crd cluster/prepare/smtp cluster/prepare/dms cluster/prepare/pagerduty cluster/prepare/delorean cluster/prepare/croaws
+cluster/prepare/local: cluster/prepare/project cluster/prepare/crd cluster/prepare/smtp cluster/prepare/dms cluster/prepare/pagerduty cluster/prepare/ratelimits cluster/prepare/delorean cluster/prepare/croaws
 	@oc create -f deploy/service_account.yaml
 	@oc create -f deploy/role.yaml
-	@oc create -f deploy/role_binding.yaml
+	@oc create -f deploy/$(INSTALLATION_PREFIX)/role_binding.yaml -n ${NAMESPACE}
 
 .PHONY: cluster/prepare/olm/subscription
 cluster/prepare/olm/subscription:
@@ -267,6 +287,10 @@ cluster/prepare/dms:
 	@-oc create secret generic $(INSTALLATION_PREFIX)-deadmanssnitch -n $(NAMESPACE) \
 		--from-literal=url=https://dms.example.com
 
+.PHONY: cluster/prepare/ratelimits
+cluster/prepare/ratelimits:
+	@-oc create -n $(NAMESPACE) -f deploy/sku-limits-configmap.yaml
+
 .PHONY: cluster/prepare/delorean
 cluster/prepare/delorean: cluster/prepare/delorean/pullsecret
 
@@ -283,7 +307,7 @@ cluster/cleanup:
 	@-oc delete -f deploy/integreatly-rhmi-cr.yml --timeout=240s --wait
 	@-oc delete namespace $(NAMESPACE) --timeout=60s --wait
 	@-oc delete -f deploy/role.yaml
-	@-oc delete -f deploy/role_binding.yaml
+	@-oc delete -f deploy/$(INSTALLATION_PREFIX)/role_binding.yaml -n ${NAMESPACE}
 
 .PHONY: cluster/cleanup/serviceaccount
 cluster/cleanup/serviceaccount:
